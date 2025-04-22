@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<code>
+    import java.util.*;
+import java.util.concurrent.*;
+
+public class BullyElection {
+    private static class Process {
+        int id;
+        boolean isActive;
+        boolean isCoordinator;
+
+        public Process(int id) {
+            this.id = id;
+            this.isActive = true;
+            this.isCoordinator = false;
+        }
+
+        @Override
+        public String toString() {
+            return "Process[id=" + id + ", active=" + isActive + ", coordinator=" + isCoordinator + "]";
+        }
+    }
+
+    private List<Process> processes;
+    private int coordinatorId;
+    private final ExecutorService executor;
+
+    public BullyElection(int numProcesses) {
+        processes = new ArrayList<>();
+        for (int i = 0; i < numProcesses; i++) {
+            processes.add(new Process(i));
+        }
+
+        // Initially, the process with highest ID is the coordinator
+        coordinatorId = numProcesses - 1;
+        processes.get(coordinatorId).isCoordinator = true;
+
+        executor = Executors.newFixedThreadPool(numProcesses);
+
+        System.out.println("Initial coordinator is Process " + coordinatorId);
+    }
+
+    public void simulateCoordinatorFailure() {
+        System.out.println("\nSimulating failure of coordinator (Process " + coordinatorId + ")");
+        processes.get(coordinatorId).isActive = false;
+        processes.get(coordinatorId).isCoordinator = false;
+    }
+
+    public void initiateElection(int processId) {
+        System.out.println("\nProcess " + processId + " initiates election");
+
+        if (!processes.get(processId).isActive) {
+            System.out.println("Process " + processId + " is not active and cannot initiate election");
+            return;
+        }
+
+        // Send election messages to higher processes
+        boolean hasHigherActiveProcess = false;
+
+        for (int i = processId + 1; i < processes.size(); i++) {
+            if (processes.get(i).isActive) {
+                System.out.println("Process " + processId + " sends election message to Process " + i);
+                hasHigherActiveProcess = true;
+
+                // Simulate the higher process responding and continuing the election
+                final int respondingProcessId = i;
+                executor.submit(() -> {
+                    try {
+                        // Simulate network delay
+                        Thread.sleep(100);
+                        System.out.println("Process " + respondingProcessId + " responds to Process " + processId);
+                        continueElection(respondingProcessId);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+        }
+
+        if (!hasHigherActiveProcess) {
+            // This process wins the election
+            becomeCoordinator(processId);
+        }
+    }
+
+    private void continueElection(int processId) {
+        // This process will check if there are any higher active processes
+        boolean hasHigherActiveProcess = false;
+
+        for (int i = processId + 1; i < processes.size(); i++) {
+            if (processes.get(i).isActive) {
+                System.out.println("Process " + processId + " sends election message to Process " + i);
+                hasHigherActiveProcess = true;
+
+                // Simulate the higher process responding and continuing the election
+                final int respondingProcessId = i;
+                executor.submit(() -> {
+                    try {
+                        // Simulate network delay
+                        Thread.sleep(100);
+                        System.out.println("Process " + respondingProcessId + " responds to Process " + processId);
+                        continueElection(respondingProcessId);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+        }
+
+        if (!hasHigherActiveProcess) {
+            // This process wins the election
+            becomeCoordinator(processId);
+        }
+    }
+
+    private void becomeCoordinator(int processId) {
+        System.out.println("\nProcess " + processId + " becomes the new coordinator");
+
+        // Update the coordinator status
+        for (Process p : processes) {
+            p.isCoordinator = false;
+        }
+
+        processes.get(processId).isCoordinator = true;
+        coordinatorId = processId;
+
+        // Send coordinator message to all other active processes
+        for (int i = 0; i < processes.size(); i++) {
+            if (i != processId && processes.get(i).isActive) {
+                System.out.println("Process " + processId + " sends coordinator message to Process " + i);
+            }
+        }
+    }
+
+    public void displayStatus() {
+        System.out.println("\nCurrent System Status:");
+        for (Process p : processes) {
+            System.out.println(p);
+        }
+    }
+
+    public void shutdown() {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(800, TimeUnit.MILLISECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    public static void main(String[] args) {
+        BullyElection system = new BullyElection(5);
+        system.displayStatus();
+
+        // Simulate the coordinator failure
+        system.simulateCoordinatorFailure();
+        system.displayStatus();
+
+        // Process 2 detects coordinator failure and initiates election
+        system.initiateElection(2);
+
+        try {
+            // Wait for the election to complete
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        system.displayStatus();
+
+        // Clean up
+        system.shutdown();
+    }
+}
+
+</code>
